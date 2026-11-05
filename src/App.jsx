@@ -64,7 +64,6 @@ import {
   deleteDoc,
   updateDoc,
   getDoc,
-  getDocs,
 } from "firebase/firestore";
 
 // =====================================================================
@@ -231,7 +230,6 @@ export default function App() {
           }
         } catch (dbError) {
           console.error("Błąd dostępu do bazy Firestore. Prawdopodobnie zablokowane reguły:", dbError);
-          // AWARYJNE WŁĄCZENIE UPRAWNIEŃ JEŚLI BAZA JEST ZABLOKOWANA
           if (isAdminEmail) {
              setUserData({
                 role: "administrator",
@@ -263,9 +261,6 @@ export default function App() {
     return () => { unsubProjects(); unsubLogs(); unsubPhotos(); unsubIssues(); unsubDocuments(); unsubUsers(); };
   }, [user, userData.approved]);
 
-  // =====================================================================
-  // AKCJE AUTORYZACYJNE (E-mail i Hasło)
-  // =====================================================================
   const handleLoginRegister = async (e) => {
     e.preventDefault();
     setAuthError("");
@@ -303,9 +298,6 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
-  // =====================================================================
-  // RENDEROWANIE: LOGOWANIE
-  // =====================================================================
   if (isAuthLoading) return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 animate-spin text-blue-600" /></div>;
 
   if (!user) {
@@ -346,7 +338,6 @@ export default function App() {
     );
   }
 
-  // WERYFIKACJA KONTA PRZEZ ADMINA (Z OBEJŚCIEM DLA SZEFA)
   const isSuperAdminFallback = user?.email?.trim().toLowerCase() === "thomekch@gmail.com";
 
   if (!userData.approved && userData.role !== "administrator" && !isSuperAdminFallback) {
@@ -369,9 +360,6 @@ export default function App() {
   const canViewTab = (tab) => isAdministrator || !!userData.permissions[tab];
   const canEditTab = (tab) => isAdministrator || !!userData.editPermissions[tab];
 
-  // =====================================================================
-  // STRUKTURA MENU
-  // =====================================================================
   const MODULES = [
     { id: "info", icon: Info, label: "Informacje" },
     { id: "dziennik", icon: BookOpen, label: "Dziennik prac" },
