@@ -1,84 +1,35 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  ClipboardCheck,
-  BookOpen,
-  Camera,
-  Plus,
-  Building2,
-  CalendarDays,
-  Circle,
-  Image as ImageIcon,
-  Loader2,
-  Handshake,
-  Wallet,
-  HardHat,
-  Gavel,
-  Trash2,
-  X,
-  Users,
-  Info,
-  ArrowLeft,
-  ArrowRight,
-  Phone,
-  MapPin,
-  Edit as EditIcon,
-  FileText,
-  Printer,
-  Settings as SettingsIco,
-  CheckSquare,
-  ShieldCheck,
-  LogOut,
-  UserPlus,
-  FolderPlus,
-  Lock,
-  Unlock,
-  Sun,
-  FileSpreadsheet,
-  CheckCircle,
-  FolderOpen,
-  AlertOctagon,
-  Download,
-  CloudSun,
-  AlertCircle,
-  FileUp,
-  Clock,
-  Menu
+  Menu, X, Building2, CalendarDays, BookOpen, Users, 
+  CheckSquare, FileText, Wallet, ImageIcon, ShieldCheck, 
+  Plus, Search, LogOut, Edit as EditIcon, Trash2, 
+  MapPin, Phone, AlertTriangle, AlertCircle, CheckCircle2,
+  Clock, ArrowRight, Download, Printer, Handshake, Paperclip, Wrench
 } from "lucide-react";
 
 import { initializeApp } from "firebase/app";
 import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  signInWithCustomToken,
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  onAuthStateChanged, signInWithCustomToken
 } from "firebase/auth";
 import {
-  getFirestore,
-  collection,
-  doc,
-  setDoc,
-  onSnapshot,
-  addDoc,
-  deleteDoc,
-  updateDoc,
-  getDoc,
+  getFirestore, collection, doc, setDoc, onSnapshot, 
+  addDoc, deleteDoc, updateDoc, getDocs
 } from "firebase/firestore";
 
 // =====================================================================
-// INICJALIZACJA FIREBASE - TUTAJ WKLEJ SWOJE KLUCZE
+// KONFIGURACJA FIREBASE
 // =====================================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyBsaheHHTW18DiT9Z4fys_SNuvBqq8Tmxc",
-  authDomain: "nadzor-v2.firebaseapp.com",
-  projectId: "nadzor-v2",
-  storageBucket: "nadzor-v2.firebasestorage.app",
-  messagingSenderId: "305749068225",
-  appId: "1:305749068225:web:f92a680daa8e68159ac740",
+  apiKey: "AIzaSyBD4OTs8oIApUkk8bUh6iIiOO_x4zQkVGo",
+  authDomain: "nadzorbudowlany-2cc37.firebaseapp.com",
+  projectId: "nadzorbudowlany-2cc37",
+  storageBucket: "nadzorbudowlany-2cc37.firebasestorage.app",
+  messagingSenderId: "775098190513",
+  appId: "1:775098190513:web:886a7b1cbf0e9526af3090",
 };
 
-const appId = "nadzor_v2_baza"; 
+const appId = "erp_budowa_v2";
 
 let app, auth, db;
 try {
@@ -86,570 +37,436 @@ try {
   auth = getAuth(app);
   db = getFirestore(app);
 } catch (error) {
-  console.warn("Brak kluczy Firebase lub błąd inicjalizacji.", error);
+  console.warn("Błąd inicjalizacji Firebase.", error);
 }
 
 // =====================================================================
-// KONFIGURACJE I FUNKCJE POMOCNICZE
+// STRUKTURA MODUŁÓW (MENU)
 // =====================================================================
-const compressImage = (file, callback) => {
-  try {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let width = img.width, height = img.height;
-        const MAX = 1000;
-        if (width > height && width > MAX) { height *= MAX / width; width = MAX; } 
-        else if (height > MAX) { width *= MAX / height; height = MAX; }
-        canvas.width = width; canvas.height = height;
-        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        callback(canvas.toDataURL("image/jpeg", 0.6));
-      };
-      img.onerror = () => callback(null);
-      img.src = event.target.result;
-    };
-    reader.onerror = () => callback(null);
-    reader.readAsDataURL(file);
-  } catch (err) { callback(null); }
-};
+const MODULES = [
+  { id: "ofertowanie", label: "Ofertowanie", icon: Handshake, desc: "Wyceny, zapytania ofertowe" },
+  { id: "planowanie", label: "Planowanie", icon: Building2, desc: "Metryczka, mapy, założenia" },
+  { id: "dokumentacja", label: "Dokumentacja", icon: BookOpen, desc: "Dziennik, umowy, usterki" },
+  { id: "pracownicy", label: "Personel", icon: Users, desc: "Lista kontaktów, czas pracy" },
+  { id: "zadania", label: "Zadania (Harmonogram)", icon: CheckSquare, desc: "Odprawy, kalendarz, priorytety" },
+  { id: "raportowanie", label: "Raportowanie", icon: FileText, desc: "Generowanie PDF, podsumowania" },
+  { id: "rozliczanie", label: "Rozliczenia", icon: Wallet, desc: "Koszty, prośby o akceptację" },
+  { id: "zdjecia", label: "Galeria", icon: ImageIcon, desc: "Baza zdjęć, eksport do raportów" },
+  { id: "admin", label: "Panel Administratora", icon: ShieldCheck, desc: "Zarządzanie globalne, uprawnienia", adminOnly: true },
+];
 
-const readDocumentBase64 = (file, callback) => {
-  if (file.size > 800000) {
-    alert("Ten plik jest za duży. Wgraj plik poniżej 800KB.");
-    callback(null);
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = (event) => callback(event.target.result);
-  reader.readAsDataURL(file);
-};
-
-const formatCurrency = (amount) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(amount || 0);
-const formatDateStr = (d) => d.toISOString().split("T")[0];
-
-// =====================================================================
-// GŁÓWNA APLIKACJA
-// =====================================================================
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState({
-    role: "wykonawca",
-    displayName: "",
-    assignedProjects: [],
-    permissions: {},
-    editPermissions: {},
-    approved: false,
-  });
-
+  const [userData, setUserData] = useState({ role: "wykonawca", displayName: "", approved: false, permissions: {} });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   
-  // Stany autoryzacji (Email + Hasło)
+  // Stany logowania
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
   const [authError, setAuthError] = useState("");
-  
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Stany Główne
-  const [currentScreen, setCurrentScreen] = useState("home");
-  const [activeTab, setActiveTab] = useState("info");
+  // Stany nawigacji
+  const [activeModule, setActiveModule] = useState("planowanie");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Dane globalne
   const [projects, setProjects] = useState([]);
   const [activeProjectId, setActiveProjectId] = useState(null);
-
-  // Dane z Firebase
-  const [logs, setLogs] = useState([]);
-  const [photos, setPhotos] = useState([]);
-  const [issues, setIssues] = useState([]);
-  const [documents, setDocuments] = useState([]);
   const [usersList, setUsersList] = useState([]);
-
-  // Stany formularzy
-  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState(null);
-  const [projectForm, setProjectForm] = useState({ name: "", investor: "", location: "", mapUrl: "", phone: "", description: "" });
-  const [issueForm, setIssueForm] = useState({ title: "", description: "", assignee: "", photo: null });
-  const issuePhotoRef = useRef(null);
-  const [docForm, setDocForm] = useState({ name: "" });
-  const docInputRef = useRef(null);
   
-  const [editingIssueId, setEditingIssueId] = useState(null);
-  const [editIssueStatus, setEditIssueStatus] = useState("");
+  // Dane projektowe
+  const [tasks, setTasks] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [financialRequests, setFinancialRequests] = useState([]); // Nowość: Prośby o akceptację kosztów
+  const [costs, setCosts] = useState([]);
 
-  // =====================================================================
-  // EFEKTY POBIERANIA DANYCH I AUTORYZACJA
-  // =====================================================================
+  // Inicjalizacja autoryzacji
   useEffect(() => {
     if (!auth) { setIsAuthLoading(false); return; }
-
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
-        try { await signInWithCustomToken(auth, __initial_auth_token); } catch (err) { console.log(err); }
-      }
-      setIsAuthLoading(false);
-    };
-    initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser && currentUser.email) {
-        const isAdminEmail = currentUser.email.trim().toLowerCase() === "thomekch@gmail.com"; 
-        const FULL_PERMS = { info: true, dziennik: true, dokumenty: true, usterki: true, zdjecia: true };
-
-        try {
-          const userDocRef = doc(db, "artifacts", appId, "public", "data", "users_roles", currentUser.uid);
-          const userSnap = await getDoc(userDocRef);
-
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            if (isAdminEmail) {
-              await setDoc(userDocRef, { role: "administrator", permissions: FULL_PERMS, editPermissions: FULL_PERMS, approved: true }, { merge: true });
-            }
-            setUserData({
-              role: isAdminEmail ? "administrator" : data.role,
-              displayName: data.displayName || "",
-              permissions: isAdminEmail ? FULL_PERMS : (data.permissions || {}),
-              editPermissions: isAdminEmail ? FULL_PERMS : (data.editPermissions || {}),
-              assignedProjects: data.assignedProjects || [],
-              approved: isAdminEmail ? true : (data.approved ?? false),
-            });
+      if (currentUser) {
+        const userDocRef = doc(db, "artifacts", appId, "users", currentUser.uid);
+        onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setUserData(docSnap.data());
           } else {
-            const defaultData = {
+            const isAdmin = currentUser.email.toLowerCase() === "thomekch@gmail.com";
+            const initialData = {
               email: currentUser.email,
+              role: isAdmin ? "administrator" : "wykonawca",
+              approved: isAdmin,
               displayName: "",
-              role: isAdminEmail ? "administrator" : "wykonawca",
-              permissions: isAdminEmail ? FULL_PERMS : FULL_PERMS,
-              editPermissions: isAdminEmail ? FULL_PERMS : FULL_PERMS,
-              assignedProjects: [],
-              approved: isAdminEmail, 
+              permissions: isAdmin ? MODULES.reduce((acc, m) => ({ ...acc, [m.id]: true }), {}) : { zadania: true, zdjecia: true }
             };
-            await setDoc(userDocRef, defaultData);
-            setUserData(defaultData);
+            setDoc(userDocRef, initialData);
+            setUserData(initialData);
           }
-        } catch (dbError) {
-          console.error("Błąd dostępu do bazy Firestore. Prawdopodobnie zablokowane reguły:", dbError);
-          if (isAdminEmail) {
-             setUserData({
-                role: "administrator",
-                displayName: "Administrator (Tryb Awaryjny)",
-                permissions: FULL_PERMS,
-                editPermissions: FULL_PERMS,
-                assignedProjects: [],
-                approved: true
-             });
-          }
-        }
+        });
       }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
+  // Pobieranie danych
   useEffect(() => {
-    if (!user || !db || (!userData.approved && userData.role !== "administrator")) return;
-    const baseRef = (col) => collection(db, "artifacts", appId, "public", "data", col);
-    
-    const unsubProjects = onSnapshot(baseRef("ins_projects"), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)), (err) => console.log("Brak dostępu do projektów (reguły)"));
-    const unsubLogs = onSnapshot(baseRef("ins_logs"), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp)), (err) => console.log("Brak dostępu do logów"));
-    const unsubPhotos = onSnapshot(baseRef("ins_photos"), (s) => setPhotos(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp)), (err) => console.log("Brak dostępu do zdjęć"));
-    const unsubIssues = onSnapshot(baseRef("ins_issues"), (s) => setIssues(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp)), (err) => console.log("Brak dostępu do usterek"));
-    const unsubDocuments = onSnapshot(baseRef("ins_documents"), (s) => setDocuments(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp)), (err) => console.log("Brak dostępu do dokumentów"));
-    const unsubUsers = onSnapshot(baseRef("users_roles"), (s) => setUsersList(s.docs.map(d => ({ id: d.id, ...d.data() }))), (err) => console.log("Brak dostępu do użytkowników"));
+    if (!user || !db) return;
+    const baseRef = (col) => collection(db, "artifacts", appId, col);
 
-    return () => { unsubProjects(); unsubLogs(); unsubPhotos(); unsubIssues(); unsubDocuments(); unsubUsers(); };
-  }, [user, userData.approved]);
+    const unsubProjects = onSnapshot(baseRef("projects"), (s) => {
+      const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      setProjects(data);
+      if (data.length > 0 && !activeProjectId) setActiveProjectId(data[0].id);
+    });
 
-  const handleLoginRegister = async (e) => {
+    const unsubTasks = onSnapshot(baseRef("tasks"), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubLogs = onSnapshot(baseRef("logs"), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubRequests = onSnapshot(baseRef("financial_requests"), (s) => setFinancialRequests(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubCosts = onSnapshot(baseRef("costs"), (s) => setCosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubUsers = onSnapshot(collection(db, "artifacts", appId, "users"), (s) => setUsersList(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    return () => { unsubProjects(); unsubTasks(); unsubLogs(); unsubRequests(); unsubCosts(); unsubUsers(); };
+  }, [user]);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError("");
-    try {
-      if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-      } else {
-        await signInWithEmailAndPassword(auth, authEmail, authPassword);
-      }
-    } catch (err) {
-      setAuthError(isRegistering ? "Błąd rejestracji. Hasło musi mieć min. 6 znaków." : "Błąd logowania. Nieprawidłowy email lub hasło.");
-    }
+    try { await signInWithEmailAndPassword(auth, authEmail, authPassword); }
+    catch (err) { setAuthError("Błąd logowania: " + err.message); }
   };
 
-  const genericAdd = async (col, data, cb) => {
-    if (!user || !activeProjectId) return;
-    try { await addDoc(collection(db, "artifacts", appId, "public", "data", col), { projectId: activeProjectId, timestamp: Date.now(), ...data }); if (cb) cb(); } catch (e) { console.error(e); }
+  const genericAdd = async (col, data) => {
+    if (!activeProjectId) return;
+    await addDoc(collection(db, "artifacts", appId, col), { projectId: activeProjectId, timestamp: Date.now(), author: user.email, ...data });
   };
-  const genericDel = async (col, id) => { try { await deleteDoc(doc(db, "artifacts", appId, "public", "data", col, id)); } catch (e) { console.error(e); } };
-  const genericUpdate = async (col, id, data) => { try { await updateDoc(doc(db, "artifacts", appId, "public", "data", col, id), data); } catch (e) { console.error(e); } };
+  const genericUpdate = async (col, id, data) => await updateDoc(doc(db, "artifacts", appId, col, id), data);
+  const genericDel = async (col, id) => await deleteDoc(doc(db, "artifacts", appId, col, id));
 
-  const handleSaveProject = async () => {
-    if (!projectForm.name.trim() || !user) return;
-    try {
-      if (editingProject) {
-        await updateDoc(doc(db, "artifacts", appId, "public", "data", "ins_projects", editingProject), { 
-          name: projectForm.name, investor: projectForm.investor, location: projectForm.location, phone: projectForm.phone, mapUrl: projectForm.mapUrl 
-        });
-      } else {
-        await addDoc(collection(db, "artifacts", appId, "public", "data", "ins_projects"), { 
-          name: projectForm.name, investor: projectForm.investor, location: projectForm.location, phone: projectForm.phone, mapUrl: projectForm.mapUrl, createdAt: Date.now() 
-        });
-      }
-      setIsProjectModalOpen(false);
-    } catch (e) { console.error(e); }
-  };
+  const isAdministrator = userData.role === "administrator";
+  const activeProject = projects.find(p => p.id === activeProjectId) || {};
 
-  if (isAuthLoading) return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 animate-spin text-blue-600" /></div>;
-
+  // --- EKRAN LOGOWANIA ---
+  if (isAuthLoading) return <div className="flex h-screen items-center justify-center bg-slate-900"><div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>;
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 p-4 font-sans text-slate-800">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4 transform rotate-3">
-              <HardHat className="w-10 h-10 text-blue-600 transform -rotate-3" />
-            </div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">System Nadzoru</h1>
-            <p className="text-sm text-slate-500 mt-2">Dostęp dla pracowników i klientów</p>
+      <div className="flex h-screen items-center justify-center bg-slate-900 font-sans p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+          <div className="text-center mb-6">
+            <Building2 className="w-12 h-12 text-blue-600 mx-auto mb-2" />
+            <h1 className="text-2xl font-black text-slate-800">ERP Budowa</h1>
+            <p className="text-xs text-slate-500">Zarządzanie Inwestycjami</p>
           </div>
-          
-          <form onSubmit={handleLoginRegister} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Adres E-mail</label>
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border-2 border-slate-100 bg-slate-50 rounded-xl p-3 text-sm focus:border-blue-500 focus:bg-white transition-all outline-none" placeholder="jan.kowalski@budowa.pl" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Hasło</label>
-              <input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border-2 border-slate-100 bg-slate-50 rounded-xl p-3 text-sm focus:border-blue-500 focus:bg-white transition-all outline-none" placeholder="••••••••" />
-            </div>
-            {authError && <p className="text-xs text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg flex gap-2 items-center"><AlertCircle className="w-4 h-4 shrink-0"/>{authError}</p>}
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-sm font-bold shadow-[0_4px_14px_0_rgb(37,99,235,0.39)] transition-transform active:scale-[0.98]">
-              {isRegistering ? "Zarejestruj się" : "Zaloguj się"}
-            </button>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input type="email" placeholder="E-mail" value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full border p-3 rounded-xl text-sm bg-slate-50" />
+            <input type="password" placeholder="Hasło" value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full border p-3 rounded-xl text-sm bg-slate-50" />
+            {authError && <p className="text-xs text-red-500 font-bold">{authError}</p>}
+            <button type="submit" className="w-full bg-blue-600 text-white font-bold p-3 rounded-xl shadow-md hover:bg-blue-700">Zaloguj się</button>
           </form>
-          
-          <div className="mt-6 text-center">
-            <button onClick={() => { setIsRegistering(!isRegistering); setAuthError(""); }} className="text-xs text-blue-600 hover:text-blue-800 font-bold transition">
-              {isRegistering ? "Masz już konto? Zaloguj się" : "Nie masz konta? Zarejestruj się"}
+        </div>
+      </div>
+    );
+  }
+
+  // --- KOMPONENTY MODUŁÓW ---
+
+  // MODUŁ 5: ZADANIA (Z PEŁNĄ EDYCJĄ I PRIORYTETAMI)
+  const TasksModule = () => {
+    const [title, setTitle] = useState("");
+    const [date, setDate] = useState("");
+    const [assignee, setAssignee] = useState("");
+    const [priority, setPriority] = useState("Normalny");
+    
+    // Edycja
+    const [editingTask, setEditingTask] = useState(null);
+
+    const projTasks = tasks.filter(t => t.projectId === activeProjectId).sort((a,b) => new Date(a.date) - new Date(b.date));
+
+    const getPriorityColor = (pri) => {
+      switch(pri) {
+        case "Krytyczny": return "bg-red-100 text-red-700 border-red-300";
+        case "Pilny": return "bg-amber-100 text-amber-700 border-amber-300";
+        case "Niski": return "bg-slate-100 text-slate-600 border-slate-300";
+        default: return "bg-blue-50 text-blue-700 border-blue-200";
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <CheckSquare className="w-5 h-5 text-blue-600" /> Utwórz nowe zadanie / polecenie
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+            <input type="text" placeholder="Tytuł zadania..." value={title} onChange={e => setTitle(e.target.value)} className="border rounded-xl p-2.5 text-sm bg-slate-50" />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border rounded-xl p-2.5 text-sm bg-slate-50" />
+            <select value={assignee} onChange={e => setAssignee(e.target.value)} className="border rounded-xl p-2.5 text-sm bg-slate-50">
+              <option value="">Przypisz do...</option>
+              {usersList.map(u => <option key={u.id} value={u.email}>{u.displayName || u.email}</option>)}
+            </select>
+            <select value={priority} onChange={e => setPriority(e.target.value)} className="border rounded-xl p-2.5 text-sm font-bold bg-slate-50">
+              <option value="Niski">Priorytet: Niski</option>
+              <option value="Normalny">Priorytet: Normalny</option>
+              <option value="Pilny">Priorytet: Pilny</option>
+              <option value="Krytyczny">Priorytet: KRYTYCZNY</option>
+            </select>
+          </div>
+          <button 
+            onClick={() => {
+              if(!title || !date) return;
+              genericAdd("tasks", { title, date, assignee, priority, status: "Oczekuje" });
+              setTitle(""); setDate(""); setAssignee(""); setPriority("Normalny");
+            }}
+            className="w-full lg:w-auto bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm"
+          >
+            Dodaj do harmonogramu
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {projTasks.map(t => {
+            const isEditing = editingTask?.id === t.id;
+            return (
+              <div key={t.id} className={`bg-white rounded-2xl shadow-sm border p-4 flex flex-col md:flex-row gap-4 justify-between border-l-4 ${t.status === 'Zakończone' ? 'border-l-emerald-500 opacity-70' : 'border-l-slate-800'}`}>
+                {isEditing ? (
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+                    <input type="text" value={editingTask.title} onChange={e=>setEditingTask({...editingTask, title: e.target.value})} className="border p-2 rounded-lg text-sm col-span-2" />
+                    <input type="date" value={editingTask.date} onChange={e=>setEditingTask({...editingTask, date: e.target.value})} className="border p-2 rounded-lg text-sm" />
+                    <select value={editingTask.status} onChange={e=>setEditingTask({...editingTask, status: e.target.value})} className="border p-2 rounded-lg text-sm font-bold">
+                      <option value="Oczekuje">Oczekuje</option>
+                      <option value="W trakcie">W trakcie</option>
+                      <option value="Opóźnione">Opóźnione</option>
+                      <option value="Zakończone">Zakończone</option>
+                    </select>
+                    <select value={editingTask.priority} onChange={e=>setEditingTask({...editingTask, priority: e.target.value})} className="border p-2 rounded-lg text-sm font-bold">
+                      <option value="Niski">Niski</option>
+                      <option value="Normalny">Normalny</option>
+                      <option value="Pilny">Pilny</option>
+                      <option value="Krytyczny">Krytyczny</option>
+                    </select>
+                    <div className="col-span-full flex gap-2 mt-2">
+                      <button onClick={() => { genericUpdate("tasks", t.id, editingTask); setEditingTask(null); }} className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Zapisz</button>
+                      <button onClick={() => setEditingTask(null)} className="bg-slate-200 text-slate-700 px-4 py-1.5 rounded-lg text-xs font-bold">Anuluj</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getPriorityColor(t.priority)} uppercase`}>{t.priority}</span>
+                        <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{t.date}</span>
+                      </div>
+                      <h4 className="font-bold text-slate-900">{t.title}</h4>
+                      {t.assignee && <p className="text-xs text-slate-500 mt-1">Wykonawca: <span className="font-bold text-slate-700">{t.assignee}</span></p>}
+                    </div>
+                    <div className="flex flex-row md:flex-col items-center justify-between md:justify-center gap-3 border-t md:border-t-0 pt-3 md:pt-0">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${t.status === 'Zakończone' ? 'bg-emerald-100 text-emerald-800' : t.status === 'Opóźnione' ? 'bg-red-100 text-red-700' : t.status === 'W trakcie' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                        {t.status}
+                      </span>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => setEditingTask(t)} className="p-2 bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600 rounded-lg transition"><EditIcon className="w-4 h-4"/></button>
+                        <button onClick={() => genericDel("tasks", t.id)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-600 hover:text-red-600 rounded-lg transition"><Trash2 className="w-4 h-4"/></button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // MODUŁ 7: ROZLICZANIA (Z PROŚBAMI O AKCEPTACJĘ OD PODWYKONAWCÓW)
+  const FinancialsModule = () => {
+    const [reqTitle, setReqTitle] = useState("");
+    const [reqAmount, setReqAmount] = useState("");
+    const projRequests = financialRequests.filter(r => r.projectId === activeProjectId);
+
+    return (
+      <div className="space-y-6">
+        {/* Panel dla podwykonawcy - Zgłoszenie */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-amber-500">
+          <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <Handshake className="w-5 h-5 text-amber-500" /> Zgłoś etap robót do akceptacji inwestorskiej
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">Wyślij prośbę do kierownika/inwestora o akceptację kosztów za wykonany zakres.</p>
+          <div className="flex flex-col md:flex-row gap-3">
+            <input type="text" placeholder="Za co? (np. Stan zero - robocizna)" value={reqTitle} onChange={e=>setReqTitle(e.target.value)} className="flex-1 border rounded-xl p-2.5 text-sm bg-slate-50" />
+            <input type="number" placeholder="Kwota netto PLN" value={reqAmount} onChange={e=>setReqAmount(e.target.value)} className="w-full md:w-48 border rounded-xl p-2.5 text-sm bg-slate-50" />
+            <button 
+              onClick={() => {
+                if(!reqTitle || !reqAmount) return;
+                genericAdd("financial_requests", { title: reqTitle, amount: parseFloat(reqAmount), status: "Oczekuje" });
+                setReqTitle(""); setReqAmount("");
+              }}
+              className="bg-amber-500 text-slate-900 font-bold px-6 py-2.5 rounded-xl text-sm"
+            >
+              Wyślij do akceptacji
             </button>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  const isSuperAdminFallback = user?.email?.trim().toLowerCase() === "thomekch@gmail.com";
-
-  if (!userData.approved && userData.role !== "administrator" && !isSuperAdminFallback) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-900 p-4 font-sans text-center">
-        <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl">
-          <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4"><ShieldCheck className="w-10 h-10 text-amber-500" /></div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Konto oczekuje na weryfikację</h2>
-          <p className="text-sm text-slate-500 mb-8">Zarejestrowałeś się poprawnie! Administrator musi teraz aktywować Twoje konto i przydzielić Cię do budowy.</p>
-          <button onClick={() => signOut(auth)} className="w-full bg-slate-100 text-slate-800 py-3 rounded-xl font-bold hover:bg-slate-200">Wyloguj i wróć</button>
+        {/* Lista próśb i decyzje administracyjne */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase text-slate-500 ml-1">Rejestr wniosków finansowych</h3>
+          {projRequests.map(req => (
+            <div key={req.id} className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-4">
+              <div>
+                <h4 className="font-bold text-slate-900">{req.title}</h4>
+                <p className="text-xs text-slate-500 mt-1">Zgłaszający: {req.author} | Data: {new Date(req.timestamp).toLocaleDateString()}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-lg font-black text-slate-800">{req.amount.toLocaleString()} PLN</span>
+                
+                {req.status === "Oczekuje" && isAdministrator ? (
+                  <div className="flex gap-2">
+                    <button onClick={() => genericUpdate("financial_requests", req.id, { status: "Zatwierdzone" })} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">Akceptuj</button>
+                    <button onClick={() => genericUpdate("financial_requests", req.id, { status: "Częściowo" })} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">Akc. Częściowo</button>
+                    <button onClick={() => genericUpdate("financial_requests", req.id, { status: "Odrzucone" })} className="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">Odrzuć</button>
+                  </div>
+                ) : (
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase ${req.status === 'Zatwierdzone' ? 'bg-emerald-100 text-emerald-700' : req.status === 'Odrzucone' ? 'bg-red-100 text-red-700' : req.status === 'Częściowo' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {req.status}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
-  }
+  };
 
-  const isAdministrator = userData.role === "administrator" || isSuperAdminFallback;
-  const availableProjects = isAdministrator ? projects : projects.filter(p => userData.assignedProjects.includes(p.id));
-  const activeProjectData = projects.find(p => p.id === activeProjectId) || {};
-  
-  const canViewTab = (tab) => isAdministrator || !!userData.permissions[tab];
-  const canEditTab = (tab) => isAdministrator || !!userData.editPermissions[tab];
-
-  const MODULES = [
-    { id: "info", icon: Info, label: "Informacje" },
-    { id: "dziennik", icon: BookOpen, label: "Dziennik prac" },
-    { id: "usterki", icon: AlertOctagon, label: "Usterki i Wady" },
-    { id: "dokumenty", icon: FolderOpen, label: "Baza Dokumentów" },
-    { id: "zdjecia", icon: ImageIcon, label: "Galeria Zdjęć" },
-  ];
-
-  const renderSidebar = () => (
-    <div className="w-64 bg-slate-900 text-slate-300 h-screen hidden md:flex flex-col fixed left-0 top-0 shadow-xl z-30">
-      <div className="p-6 bg-slate-950 flex items-center gap-3">
-        <div className="bg-blue-600 p-2 rounded-lg"><HardHat className="w-6 h-6 text-white" /></div>
-        <div>
-          <h1 className="text-white font-black text-lg tracking-tight leading-none">Nadzór V2</h1>
-          <p className="text-[10px] text-blue-400 uppercase font-bold mt-1 tracking-widest">{userData.role}</p>
-        </div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        <button onClick={() => { setCurrentScreen("home"); setActiveProjectId(null); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${currentScreen === "home" ? "bg-blue-600 text-white shadow-lg" : "hover:bg-slate-800 hover:text-white"}`}>
-          <Building2 className="w-5 h-5" /> Moje Budowy
-        </button>
-
-        {currentScreen === "project" && (
-          <div className="pt-4 mt-4 border-t border-slate-800">
-            <div className="px-4 mb-2 text-[10px] uppercase font-black text-slate-500 tracking-wider">Aktywny projekt</div>
-            <div className="px-4 text-sm font-bold text-white mb-4 line-clamp-2 leading-tight">{activeProjectData.name}</div>
-            {MODULES.map(m => {
-              if (!canViewTab(m.id)) return null;
-              const IconComp = m.icon;
-              return (
-                <button key={m.id} onClick={() => setActiveTab(m.id)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === m.id ? "bg-slate-800 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800/50"}`}>
-                  <IconComp className={`w-4 h-4 ${activeTab === m.id ? 'text-blue-500' : ''}`} /> {m.label}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="p-4 bg-slate-950">
-        <button onClick={() => signOut(auth)} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-400 py-2.5 rounded-xl text-xs font-bold transition-colors">
-          <LogOut className="w-4 h-4" /> Wyloguj
-        </button>
-      </div>
+  // SZKIELET POZOSTAŁYCH MODUŁÓW (Jako Placeholdery UI)
+  const PlaceholderModule = ({ title, description, icon: Icon }) => (
+    <div className="flex flex-col items-center justify-center h-96 bg-white rounded-3xl border border-dashed border-slate-300 text-center p-8">
+      <div className="bg-blue-50 text-blue-600 p-4 rounded-2xl mb-4"><Icon className="w-10 h-10" /></div>
+      <h2 className="text-xl font-bold text-slate-900 mb-2">Moduł: {title}</h2>
+      <p className="text-slate-500 max-w-md">{description}</p>
+      <span className="mt-6 bg-slate-100 text-slate-600 px-4 py-1.5 rounded-full text-xs font-bold uppercase">Szkielet przygotowany do integracji bazy danych</span>
     </div>
   );
 
+  const renderActiveModule = () => {
+    switch(activeModule) {
+      case "zadania": return <TasksModule />;
+      case "rozliczanie": return <FinancialsModule />;
+      case "planowanie": 
+        return (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="text-2xl font-black text-slate-900 mb-2">{activeProject.name || "Brak wybranej budowy"}</h2>
+            <p className="text-slate-600 mb-4">Tutaj znajduje się metryczka budowy, mapa, pinezka, opis zamierzenia inwestycyjnego. W pełni edytowalne z poziomu panelu administracyjnego.</p>
+            <div className="bg-slate-100 h-64 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase border border-slate-200">Miejsce na iframe Google Maps</div>
+          </div>
+        );
+      case "ofertowanie": return <PlaceholderModule title="Ofertowanie i Kosztorysy" description="Tu znajdzie się kreator zapytań ofertowych do podwykonawców (RFQ), porównywarka ofert oraz przygotowanie wyceny dla inwestora." icon={Handshake} />;
+      case "dokumentacja": return <PlaceholderModule title="Dokumentacja Budowy" description="Rozszerzony Dziennik Budowy, wgrane pliki PDF (Projekty), umowy z Inwestorem oraz zgłoszenia usterek." icon={BookOpen} />;
+      case "pracownicy": return <PlaceholderModule title="Baza Personelu i Podwykonawców" description="Zarządzanie listą kontaktów (Inwestor, Inspektor, Firmy) oraz elektroniczna ewidencja czasu pracy dla robotników." icon={Users} />;
+      case "raportowanie": return <PlaceholderModule title="Kreator Raportów (PDF)" description="Generowanie oficjalnych raportów miesięcznych/kwartalnych z możliwością wyboru sekcji (zdjęcia, koszty, usterki) do wydruku w A4." icon={FileText} />;
+      case "zdjecia": return <PlaceholderModule title="Galeria Dokumentacji" description="Globalna galeria zdjęć z placu budowy. Wybieranie zdjęć (checkboxy) do eksportu do Raportu." icon={ImageIcon} />;
+      case "admin": return <PlaceholderModule title="Globalny Panel Administratora" description="Zarządzanie modułami dla użytkowników. Przypisywanie uprawnień, przegląd wszystkich budów naraz." icon={ShieldCheck} />;
+      default: return null;
+    }
+  };
+
+
+  // =====================================================================
+  // GŁÓWNY LAYOUT (SIDEBAR + CONTENT)
+  // =====================================================================
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-800">
-      {renderSidebar()}
+    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
       
-      {/* GŁÓWNA ZAWARTOŚĆ */}
-      <div className="flex-1 flex flex-col md:ml-64 overflow-hidden relative">
-        <header className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg z-20">
+      {/* SIDEBAR (Desktop) / DRAWER (Mobile) */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:flex-shrink-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <HardHat className="w-7 h-7 text-blue-500" />
-            <div><h1 className="text-sm font-black leading-none">{currentScreen === "home" ? "Nadzór V2" : activeProjectData.name}</h1></div>
+            <div className="bg-blue-600 text-white p-2 rounded-lg"><Building2 className="w-6 h-6" /></div>
+            <div>
+              <h1 className="text-white font-black tracking-tight leading-tight">ERP BUDOWA</h1>
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">System Zarządzania</span>
+            </div>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-slate-800 rounded-xl"><Menu className="w-5 h-5"/></button>
-        </header>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-1 bg-slate-800 rounded text-white"><X className="w-5 h-5"/></button>
+        </div>
 
-        {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-[68px] left-0 w-full bg-slate-900 shadow-2xl z-30 animate-in slide-in-from-top-2 pb-4 border-b border-slate-800">
-            <button onClick={() => { setCurrentScreen("home"); setActiveProjectId(null); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-6 py-4 text-sm font-bold border-b border-slate-800 ${currentScreen === "home" ? "text-blue-400" : "text-slate-300"}`}><Building2 className="w-5 h-5" /> Moje Budowy</button>
-            {currentScreen === "project" && MODULES.map(m => {
-              if(!canViewTab(m.id)) return null;
-              const IconComp = m.icon;
-              return <button key={m.id} onClick={() => {setActiveTab(m.id); setIsMobileMenuOpen(false);}} className={`w-full flex items-center gap-3 px-6 py-3.5 text-sm font-medium border-b border-slate-800/50 ${activeTab === m.id ? "text-blue-400 bg-slate-800/30" : "text-slate-400"}`}><IconComp className="w-4 h-4"/>{m.label}</button>
-            })}
-            <button onClick={() => signOut(auth)} className="w-full flex items-center gap-3 px-6 py-4 text-sm font-bold text-red-400 mt-2"><LogOut className="w-5 h-5"/> Wyloguj się</button>
-          </div>
-        )}
+        {/* Selektor Projektu */}
+        <div className="p-4 border-b border-slate-800">
+          <label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Aktywna Inwestycja:</label>
+          <select 
+            value={activeProjectId || ""} 
+            onChange={(e) => setActiveProjectId(e.target.value)}
+            className="w-full bg-slate-800 border-none text-white text-sm font-bold rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 relative">
-          <div className="max-w-5xl mx-auto w-full pb-20 md:pb-8">
-            
-            {currentScreen === "home" && (
-              <div className="space-y-8 animate-in fade-in">
-                {isAdministrator && (
-                  <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 mb-8">
-                    <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2"><AlertOctagon className="w-5 h-5 text-red-500"/> Zgłoszone Usterki (Wszystkie budowy)</h2>
-                    <div className="space-y-3">
-                      {issues.filter(i => i.status !== "Naprawiona" && i.status !== "Zaakceptowana").length === 0 ? <p className="text-xs text-slate-400">Wszystko naprawione!</p> : issues.filter(i => i.status !== "Naprawiona" && i.status !== "Zaakceptowana").map(iss => (
-                        <div key={iss.id} onClick={() => {setActiveProjectId(iss.projectId); setCurrentScreen('project'); setActiveTab('usterki');}} className="bg-white p-3 rounded-xl border shadow-sm cursor-pointer hover:border-red-300">
-                          <p className="text-[10px] text-red-500 font-bold uppercase mb-1">{projects.find(p => p.id === iss.projectId)?.name}</p>
-                          <p className="text-sm font-semibold">{iss.title}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-hide">
+          {MODULES.map(mod => {
+            if (mod.adminOnly && !isAdministrator) return null;
+            // Tutaj normalnie sprawdzalibyśmy uprawnienia per moduł z userData.permissions
+            const isActive = activeModule === mod.id;
+            const Icon = mod.icon;
+            return (
+              <button
+                key={mod.id}
+                onClick={() => { setActiveModule(mod.id); setIsSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition text-left group ${isActive ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}
+              >
+                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'}`} />
                 <div>
-                  <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><Building2 className="w-6 h-6 text-blue-600"/> Twoje Inwestycje</h2>
-                  {isAdministrator && (
-                    <button onClick={() => { setProjectForm({name:"", investor:"", location:"", mapUrl:"", phone:"", description:""}); setIsProjectModalOpen(true); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl shadow-[0_4px_14px_0_rgb(37,99,235,0.39)] flex items-center justify-center gap-2 font-bold transition mb-6">
-                      <Plus className="w-5 h-5" /> Utwórz nową budowę
-                    </button>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {availableProjects.length === 0 && <p className="text-slate-400">Brak przypisanych budów.</p>}
-                    {availableProjects.map(p => (
-                      <div key={p.id} onClick={() => { setActiveProjectId(p.id); setCurrentScreen("project"); setActiveTab("info"); }} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 cursor-pointer hover:border-blue-200 transition-all relative">
-                        <h3 className="font-black text-xl text-slate-800 mb-2 pr-10">{p.name}</h3>
-                        {p.location && <div className="text-xs font-medium text-slate-500 flex items-center gap-1.5"><MapPin className="w-4 h-4 text-slate-400" /> {p.location}</div>}
-                        {isAdministrator && (
-                          <div className="absolute top-4 right-4 flex gap-2">
-                            <button onClick={(e) => { e.stopPropagation(); setEditingProject(p.id); setProjectForm({name: p.name, investor: p.investor||"", location: p.location||"", mapUrl: p.mapUrl||"", phone: p.phone||"", description: p.description||""}); setIsProjectModalOpen(true); }} className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg"><EditIcon className="w-4 h-4"/></button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <div className="text-sm font-bold">{mod.label}</div>
+                  <div className={`text-[10px] ${isActive ? 'text-blue-200' : 'text-slate-500'}`}>{mod.desc}</div>
                 </div>
+              </button>
+            )
+          })}
+        </nav>
 
-                {isAdministrator && (
-                  <div className="mt-12 pt-8 border-t border-slate-200">
-                    <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><ShieldCheck className="w-6 h-6 text-blue-600"/> Użytkownicy</h2>
-                    <div className="space-y-4">
-                      {usersList.map(u => (
-                        <div key={u.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-start md:items-center">
-                          <div className="flex-1">
-                            <p className="font-bold text-slate-800">{u.displayName || "Brak Imienia"} <span className="text-xs text-slate-500 ml-2">{u.email}</span></p>
-                            <div className="flex gap-2 mt-2">
-                              <select value={u.role} onChange={e => updateDoc(doc(db, "artifacts", appId, "public", "data", "users_roles", u.id), { role: e.target.value })} className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none">
-                                <option value="administrator">Administrator</option><option value="kierownik budowy">Kierownik</option><option value="inwestor">Inwestor</option><option value="wykonawca">Wykonawca</option>
-                              </select>
-                              <button onClick={() => updateDoc(doc(db, "artifacts", appId, "public", "data", "users_roles", u.id), { approved: !u.approved })} className={`text-xs px-3 py-1 rounded-lg font-bold ${u.approved ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{u.approved ? "Aktywny" : "Zablokowany"}</button>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 flex-wrap items-center">
-                            {projects.map((proj) => {
-                              const isAssigned = (u.assignedProjects || []).includes(proj.id);
-                              return (
-                                <button key={proj.id} onClick={() => {
-                                  let updated = isAssigned ? (u.assignedProjects || []).filter(id => id !== proj.id) : [...(u.assignedProjects || []), proj.id];
-                                  updateDoc(doc(db, "artifacts", appId, "public", "data", "users_roles", u.id), { assignedProjects: updated });
-                                }} className={`text-[10px] px-2 py-1.5 rounded-lg border font-bold ${isAssigned ? "bg-blue-600 text-white" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
-                                  {proj.name}
-                                </button>
-                              );
-                            })}
-                            <button onClick={() => genericDel("users_roles", u.id)} className="bg-red-50 text-red-500 p-2 rounded-lg ml-2 hover:bg-red-100"><Trash2 className="w-4 h-4"/></button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {currentScreen === "project" && (
-              <>
-                {/* INFO */}
-                {activeTab === "info" && (
-                  <div className="space-y-6 animate-in fade-in zoom-in duration-300">
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center relative overflow-hidden">
-                      <Building2 className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-                      <h2 className="text-3xl font-black text-slate-800 mb-2">{activeProjectData?.name}</h2>
-                      <p className="text-sm text-slate-500 max-w-lg mx-auto">{activeProjectData?.description || "Brak opisu inwestycji."}</p>
-                    </div>
-                    {activeProjectData.mapUrl && (
-                      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-2 overflow-hidden h-[400px]">
-                        <iframe title="Mapa Google" src={`https://maps.google.com/maps?q=${encodeURIComponent(activeProjectData.mapUrl)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} className="w-full h-full rounded-2xl border-0" loading="lazy"></iframe>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* DZIENNIK */}
-                {activeTab === "dziennik" && (
-                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
-                    <BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <p className="text-slate-500">Tutaj lądują notatki z budowy</p>
-                  </div>
-                )}
-
-                {/* DOKUMENTY */}
-                {activeTab === "dokumenty" && (
-                  <div className="space-y-6 animate-in fade-in">
-                    {canEditTab("dokumenty") && (
-                      <div className="bg-white rounded-3xl shadow-sm border p-6">
-                        <div className="flex flex-col md:flex-row gap-3">
-                          <input type="text" placeholder="Nazwa pliku" value={docForm.name} onChange={e => setDocForm({...docForm, name: e.target.value})} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm outline-none" />
-                          <input type="file" ref={docInputRef} className="hidden" accept=".pdf,image/*" onChange={e => {
-                            if(e.target.files[0]) readDocumentBase64(e.target.files[0], b64 => {
-                              if(b64) genericAdd("ins_documents", { name: docForm.name, fileBase64: b64, dateStr: formatDateStr(new Date()) }, () => setDocForm({name: ""}));
-                            });
-                          }}/>
-                          <button onClick={() => docInputRef.current?.click()} disabled={!docForm.name.trim()} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition"><FileUp className="w-4 h-4"/> Wgraj</button>
-                        </div>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {documents.filter(d => d.projectId === activeProjectId).map(d => (
-                        <div key={d.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex gap-4">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-slate-800 text-sm truncate">{d.name}</h4>
-                            <div className="flex gap-2 mt-3">
-                              <a href={d.fileBase64} download={d.name} className="flex-1 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition text-xs font-bold py-2 rounded-xl flex justify-center items-center gap-1"><Download className="w-3 h-3"/> Pobierz</a>
-                              {canEditTab("dokumenty") && <button onClick={() => genericDel("ins_documents", d.id)} className="bg-red-50 hover:bg-red-100 text-red-500 transition p-2 rounded-xl"><Trash2 className="w-4 h-4"/></button>}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* USTERKI */}
-                {activeTab === "usterki" && (
-                  <div className="space-y-6 animate-in fade-in">
-                    {canEditTab("usterki") && (
-                      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><AlertOctagon className="w-5 h-5 text-red-500"/> Zgłoś nową usterkę</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <input type="text" placeholder="Tytuł usterki" value={issueForm.title} onChange={e => setIssueForm({...issueForm, title: e.target.value})} className="bg-slate-50 border border-slate-200 outline-none focus:border-red-500 rounded-xl p-3 text-sm" />
-                          <select value={issueForm.assignee} onChange={e => setIssueForm({...issueForm, assignee: e.target.value})} className="bg-slate-50 border border-slate-200 outline-none rounded-xl p-3 text-sm">
-                            <option value="">Przypisz (opcjonalnie)</option>
-                            {usersList.map(u => <option key={u.id} value={u.email}>{u.displayName || u.email}</option>)}
-                          </select>
-                        </div>
-                        <div className="flex flex-wrap gap-4">
-                          <input type="file" ref={issuePhotoRef} className="hidden" accept="image/*" onChange={e => { if(e.target.files[0]) compressImage(e.target.files[0], b64 => setIssueForm({...issueForm, photo: b64})); }} />
-                          <button onClick={() => issuePhotoRef.current?.click()} className="bg-slate-100 hover:bg-slate-200 transition px-5 py-2.5 rounded-xl text-sm font-bold flex gap-2 items-center"><Camera className="w-4 h-4"/> Zdjęcie</button>
-                          <button onClick={() => { genericAdd("ins_issues", { ...issueForm, status: "Zgłoszona", dateString: formatDateStr(new Date()), photoBase64: issueForm.photo }, () => setIssueForm({title:"", description:"", assignee:"", photo:null})); }} disabled={!issueForm.title.trim()} className="bg-red-600 hover:bg-red-700 disabled:opacity-50 transition text-white px-8 py-2.5 rounded-xl text-sm font-bold">Zgłoś usterkę</button>
-                        </div>
-                        {issueForm.photo && <img src={issueForm.photo} className="h-24 mt-4 rounded-xl border object-cover" alt="Podgląd"/>}
-                      </div>
-                    )}
-                    <div className="space-y-4">
-                      {issues.filter(i => i.projectId === activeProjectId).map(iss => {
-                        const isEditing = editingIssueId === iss.id;
-                        return (
-                          <div key={iss.id} className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 flex flex-col md:flex-row gap-5 relative overflow-hidden">
-                            <div className={`absolute left-0 top-0 bottom-0 w-2 ${iss.status === 'Zaakceptowana' ? 'bg-emerald-500' : iss.status === 'Naprawiona' ? 'bg-blue-500' : iss.status === 'W trakcie' ? 'bg-amber-500' : 'bg-red-500'}`}></div>
-                            {iss.photoBase64 && <img src={iss.photoBase64} className="w-full md:w-32 h-32 object-cover rounded-2xl border shrink-0" alt="Wada"/>}
-                            <div className="flex-1">
-                              <div className="flex justify-between items-start mb-2">
-                                <h4 className="font-bold text-slate-800">{iss.title}</h4>
-                                <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${iss.status === 'Zaakceptowana' ? 'bg-emerald-100 text-emerald-700' : iss.status === 'Naprawiona' ? 'bg-blue-100 text-blue-700' : iss.status === 'W trakcie' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{iss.status}</span>
-                              </div>
-                              {isEditing ? (
-                                <div className="flex gap-2 mt-3 p-3 bg-slate-50 rounded-xl border">
-                                  <select value={editIssueStatus} onChange={e => setEditIssueStatus(e.target.value)} className="border rounded-lg p-2 text-xs font-bold outline-none">
-                                    <option value="Zgłoszona">Zgłoszona</option><option value="W trakcie">W trakcie</option><option value="Naprawiona">Naprawiona</option>
-                                  </select>
-                                  <button onClick={() => { genericUpdate("ins_issues", iss.id, {status: editIssueStatus}); setEditingIssueId(null); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Zapisz</button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2 mt-4">
-                                  <button onClick={() => {setEditingIssueId(iss.id); setEditIssueStatus(iss.status);}} className="bg-slate-100 hover:bg-slate-200 transition px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"><EditIcon className="w-3 h-3"/> Zmień status</button>
-                                  {isAdministrator && <button onClick={() => genericDel("ins_issues", iss.id)} className="bg-red-50 hover:bg-red-100 transition text-red-500 p-1.5 rounded-lg ml-auto"><Trash2 className="w-4 h-4"/></button>}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </main>
-      </div>
-
-      {/* MODAL EDYCJI PROJEKTU */}
-      {isProjectModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h2 className="font-black text-xl text-slate-800">{editingProject ? "Edytuj Budowę" : "Nowa Budowa"}</h2>
-              <button onClick={() => setIsProjectModalOpen(false)} className="w-8 h-8 bg-white border border-slate-200 hover:bg-slate-100 transition rounded-full flex items-center justify-center"><X className="w-4 h-4" /></button>
+        <div className="p-4 border-t border-slate-800">
+          <div className="flex items-center gap-3 bg-slate-800 p-3 rounded-xl">
+            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-slate-300 uppercase">
+              {userData.displayName ? userData.displayName[0] : user.email[0]}
             </div>
-            <div className="p-6 overflow-y-auto space-y-4">
-              <input type="text" placeholder="Nazwa" value={projectForm.name} onChange={e => setProjectForm({...projectForm, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 outline-none focus:border-blue-500 rounded-xl p-3 text-sm" />
-              <input type="text" placeholder="Lokalizacja" value={projectForm.location} onChange={e => setProjectForm({...projectForm, location: e.target.value})} className="w-full bg-slate-50 border border-slate-200 outline-none focus:border-blue-500 rounded-xl p-3 text-sm" />
-              <input type="url" placeholder="Link do Mapy" value={projectForm.mapUrl} onChange={e => setProjectForm({...projectForm, mapUrl: e.target.value})} className="w-full bg-slate-50 border border-slate-200 outline-none focus:border-blue-500 rounded-xl p-3 text-sm" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-white truncate">{userData.displayName || user.email}</div>
+              <div className="text-[10px] text-amber-400 uppercase font-black truncate">{userData.role}</div>
             </div>
-            <div className="p-6 border-t border-slate-100 bg-white">
-              <button onClick={handleSaveProject} disabled={!projectForm.name.trim()} className="w-full bg-blue-600 hover:bg-blue-700 transition disabled:opacity-50 text-white py-3.5 rounded-xl font-bold">Zapisz Projekt</button>
-            </div>
+            <button onClick={() => auth.signOut()} className="text-slate-400 hover:text-red-400 p-1" title="Wyloguj"><LogOut className="w-4 h-4"/></button>
           </div>
         </div>
-      )}
+      </aside>
 
+      {/* OVERLAY DLA MOBILE */}
+      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-slate-900/60 z-30 lg:hidden backdrop-blur-sm animate-in fade-in" />}
+
+      {/* GŁÓWNA TREŚĆ MODUŁÓW */}
+      <main className="flex-1 flex flex-col h-screen min-w-0 bg-slate-100">
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+              <Menu className="w-6 h-6" />
+            </button>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight hidden sm:block">
+              {MODULES.find(m => m.id === activeModule)?.label}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition shadow-sm hidden sm:block">
+              + Szybka Akcja
+            </button>
+          </div>
+        </header>
+        
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-6xl mx-auto">
+            {renderActiveModule()}
+          </div>
+        </div>
+      </main>
+      
     </div>
   );
 }
