@@ -1,3 +1,5 @@
+JavaScript
+
 import React, { useState, useEffect } from "react";
 import {
   Menu, X, Building2, CalendarDays, BookOpen, Users, 
